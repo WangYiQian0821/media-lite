@@ -10,6 +10,28 @@ Media Lite 是用 Rust 和 egui 编写的 Windows Emby 客户端。支持多服�
 
 服务器和本机设置存放在 `%APPDATA%\MediaLite\config-v2.json`。首次启动时会从同目录的旧版 `config.json` 导入配置。这个文件可能含有登录令牌，请妥善保管。
 
+## 客户端界面
+
+截图来自 Media Lite 0.1.6 Windows 便携版，使用本地示例媒体库。
+
+### 首页
+
+![媒体库首页，显示推荐海报、继续观看和导航](docs/screenshots/home.png)
+
+### 详情页
+
+![剧集详情，显示版本、音轨、字幕选项和选集列表](docs/screenshots/detail.png)
+
+### 播放器
+
+![内置播放器，显示视频画面、时间轴和播放控件](docs/screenshots/player.png)
+
+### 设置
+
+![设置窗口，左侧为设置分类，右侧为常规设置](docs/screenshots/settings.png)
+
+示例画面取自 NASA 图库，原图署名见对应条目。[NEOWISE](https://images.nasa.gov/details/PIA17254) · [阿波罗 8 号](https://images.nasa.gov/details/as08-14-2383) · [阿波罗 17 号](https://images.nasa.gov/details/as17-148-22727) · [土星光环](https://images.nasa.gov/details/PIA08329) · [月球正面](https://images.nasa.gov/details/PIA00302) · [木星](https://images.nasa.gov/details/PIA00343)
+
 ## 构建
 
 在 Windows x64 上用 Rust 工具链构建。若使用 MinGW，建议在纯 ASCII 路径下构建。
