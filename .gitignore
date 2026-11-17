@@ -1,0 +1,13 @@
+/dist/
+/target/
+/runtime/
+/*.exe
+/*.zip
+/*.zip.sha256
+/src/*.broken
+/播放界面复刻依据.md
+/设置界面复刻依据.md
+/首页界面复刻依据.md
+config.json
+config-v2.json
+.env
