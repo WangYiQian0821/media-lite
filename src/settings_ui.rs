@@ -67,7 +67,7 @@ pub(super) enum Command {
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum Editor { Recommend, PreferredVersion, BlockedWords, Proxy }
+pub(super) enum Editor { Recommend, PreferredVersion, BlockedWords, Proxy, DanmakuApi }
 
 impl Editor {
     fn label(self) -> Translation {
@@ -76,6 +76,7 @@ impl Editor {
             Self::PreferredVersion => ("Preferred versions", "首选版本"),
             Self::BlockedWords => ("Blocked danmaku words", "弹幕屏蔽词"),
             Self::Proxy => ("HTTP proxy address", "HTTP 代理地址"),
+            Self::DanmakuApi => ("Custom danmaku API", "自定义弹幕 API"),
         }
     }
 
@@ -85,6 +86,7 @@ impl Editor {
             Self::PreferredVersion => &mut prefs.playback.preferred_version,
             Self::BlockedWords => &mut prefs.danmaku.blocked_words,
             Self::Proxy => &mut prefs.network.proxy_address,
+            Self::DanmakuApi => &mut prefs.danmaku.api_url,
         }
     }
 }
@@ -637,7 +639,15 @@ impl AppLite {
             }),
             Tab::Danmaku => group(ui, colors, |r| {
                 let danmaku = &mut prefs.danmaku;
-                r.switch("▤", ("Enable danmaku", "开启弹幕"), ("Display imported XML danmaku in the player", "在播放器中显示导入的本地 XML 弹幕"), &mut danmaku.enabled);
+                r.switch("▤", ("Enable danmaku", "开启弹幕"), ("Display local and online danmaku in the player", "在播放器中显示本地和在线弹幕"), &mut danmaku.enabled);
+                let api_hint = if danmaku.api_url.is_empty() {
+                    ("Enter a DandanPlay v2 compatible API address", "填写兼容 DandanPlay v2 的 API 地址")
+                } else {
+                    ("DandanPlay v2 address saved", "已保存 DandanPlay v2 地址")
+                };
+                if r.command("⇄", Editor::DanmakuApi.label(), &tr(api_hint), None) {
+                    emit(Command::Edit(Editor::DanmakuApi));
+                }
                 r.level("☷", ("Maximum scroll lines", "滚动弹幕最大行数"), EMPTY, &mut danmaku.scroll_lines, 0..=20, 1.0, "");
                 r.level("⇡", ("Maximum top lines", "顶部弹幕最大行数"), EMPTY, &mut danmaku.top_lines, 0..=10, 1.0, "");
                 r.level("⇣", ("Maximum bottom lines", "底部弹幕最大行数"), EMPTY, &mut danmaku.bottom_lines, 0..=10, 1.0, "");
@@ -800,8 +810,17 @@ impl AppLite {
                     .anchor(Align2::CENTER_CENTER, Vec2::ZERO).collapsible(false).resizable(false)
                     .show(ctx, |ui| {
                         let proxy = matches!(field, Editor::Proxy);
-                        if proxy {
-                            ui.add_sized([408.0, 32.0], egui::TextEdit::singleline(draft).hint_text("http://127.0.0.1:10808"));
+                        let address_hint = match field {
+                            Editor::Proxy => Some("http://127.0.0.1:10808"),
+                            Editor::DanmakuApi => Some("https://example.com/api/v2"),
+                            _ => None,
+                        };
+                        if let Some(hint) = address_hint {
+                            if matches!(field, Editor::DanmakuApi) {
+                                ui.label(tr(("Use the service URL or its /api/v2 address. Clear the field to remove it.",
+                                    "可填服务根地址或 /api/v2 地址。清空后保存可移除配置。")));
+                            }
+                            ui.add_sized([408.0, 32.0], egui::TextEdit::singleline(draft).hint_text(hint));
                         } else {
                             ui.label(tr(("Use one entry per line. Wrap a regular expression in /…/.", "每行一项，正则表达式用 /…/ 包住。")));
                             ui.add_sized([408.0, 162.0], egui::TextEdit::multiline(draft));
@@ -818,10 +837,10 @@ impl AppLite {
                             }
                             if ui.button(tr(("Save", "保存"))).clicked() {
                                 let value = draft.trim();
-                                let valid = if proxy {
-                                    Network::valid_proxy_address(value)
-                                } else {
-                                    TextRules::new(value).is_ok()
+                                let valid = match field {
+                                    Editor::Proxy => Network::valid_proxy_address(value),
+                                    Editor::DanmakuApi => value.is_empty() || danmaku::Endpoint::parse(value).is_some(),
+                                    _ => TextRules::new(value).is_ok(),
                                 };
                                 if valid {
                                     *field.value(&mut self.prefs) = value.to_owned();
@@ -830,9 +849,11 @@ impl AppLite {
                                     }
                                     close = true;
                                 } else {
-                                    *error = if proxy {
-                                        tr(("Enter an HTTP proxy URL with host and optional port", "请输入带主机地址和可选端口的 HTTP 代理地址"))
-                                    } else { tr(("Check the regular expression", "请检查正则表达式")) }.into_owned();
+                                    *error = tr(match field {
+                                        Editor::Proxy => ("Enter an HTTP proxy URL with host and optional port", "请输入带主机地址和可选端口的 HTTP 代理地址"),
+                                        Editor::DanmakuApi => ("Enter a valid HTTP or HTTPS danmaku API address", "请输入有效的 HTTP 或 HTTPS 弹幕 API 地址"),
+                                        _ => ("Check the regular expression", "请检查正则表达式"),
+                                    }).into_owned();
                                 }
                             }
                         });

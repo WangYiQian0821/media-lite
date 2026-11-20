@@ -629,8 +629,12 @@ impl Mpv {
         self.set_property(property, &value)
     }
 
-    pub fn add_subtitle(&self, url: &str) -> bool {
-        self.command(COMMAND_SUBTITLE, &["sub-add", url, "select"])
+    pub fn add_subtitle(&self, url: &str, title: Option<&str>) -> bool {
+        let mut args = vec!["sub-add", url, "select"];
+        if let Some(title) = title {
+            args.push(title);
+        }
+        self.command(COMMAND_SUBTITLE, &args)
     }
 }
 

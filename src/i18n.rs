@@ -340,6 +340,8 @@ static TABLE: &[(&str, &str)] = &[
     ("Playlist", "播放列表"),
     ("Loading episodes…", "正在加载选集…"),
     ("Danmaku", "弹幕"),
+    ("Search danmaku", "搜索弹幕"),
+    ("Search subtitles", "搜索字幕 · SubtitleCat"),
     ("Show danmaku", "显示弹幕"),
     ("Import local danmaku XML", "导入本地弹幕 XML"),
     ("Danmaku loaded", "弹幕已载入"),

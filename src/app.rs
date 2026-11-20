@@ -27,6 +27,12 @@ mod home_ui;
 mod settings_ui;
 #[path = "updates.rs"]
 mod updates;
+#[path = "danmaku.rs"]
+mod danmaku;
+#[path = "subtitlecat.rs"]
+mod subtitlecat;
+#[path = "player_captions.rs"]
+mod player_captions;
 
 // ------------------------------------------------------------------ config
 
@@ -192,7 +198,7 @@ struct Player {
     fill_video: bool,
     show_cache_speed: bool,
     auto_hide: bool,
-    danmaku: Vec<player_ui::Danmaku>,
+    danmaku: Vec<danmaku::Comment>,
     danmaku_filter: TextRules,
     show_danmaku: bool,
     notice: Option<(String, f64)>,
@@ -208,6 +214,8 @@ struct Player {
     boost_base_speed: Option<f64>,
     /// mpv driving the picture, when libmpv could be loaded.
     engine: Option<crate::mpv::Mpv>,
+    downloaded_subtitles: Vec<tempfile::TempPath>,
+    caption_search: Option<player_captions::SearchDialog>,
 }
 
 impl Player {
@@ -393,6 +401,7 @@ enum Action {
     TogglePlayerAutoHide,
     LoadLocalSubtitles,
     LoadDanmaku,
+    OpenCaptionSearch(player_captions::Source),
     ToggleDanmaku,
     SelectSecondarySubtitle(Option<i64>),
     PlayExternal(MediaItem, PlayerChoice),
@@ -935,7 +944,7 @@ impl AppLite {
         let key = format!("{}|{}", target.base, item.id);
         let filter = TextRules::new(&self.prefs.danmaku.blocked_words).unwrap_or_default();
         let danmaku = if self.prefs.danmaku.enabled && self.prefs.danmaku.remember {
-            self.danmaku_history.get(&key).and_then(|path| player_ui::read_danmaku(path, &filter).ok()).unwrap_or_default()
+            self.danmaku_history.get(&key).and_then(|path| danmaku::read_xml(path, &filter).ok()).unwrap_or_default()
         } else {
             Vec::new()
         };
@@ -990,6 +999,8 @@ impl AppLite {
             boost_started: None,
             boost_base_speed: None,
             engine: None,
+            downloaded_subtitles: Vec::new(),
+            caption_search: None,
         });
     }
 
@@ -1377,16 +1388,24 @@ impl AppLite {
                     player.show_danmaku = !player.show_danmaku;
                 }
             }
+            Action::OpenCaptionSearch(source) => {
+                if let Some(player) = &mut self.player {
+                    player.menu = None;
+                    player.caption_search = Some(player_captions::SearchDialog::new(
+                        source, &player.item, &self.prefs.danmaku.api_url,
+                    ));
+                }
+            }
             Action::LoadLocalSubtitles | Action::LoadDanmaku => {
                 let Some(player) = &mut self.player else { return };
                 let subtitles = matches!(action, Action::LoadLocalSubtitles);
                 if let Some(path) = player_ui::open_player_file(self.host_hwnd, subtitles) {
                     let message = if subtitles {
-                        if player.engine.as_ref().is_some_and(|mpv| mpv.add_subtitle(&path.to_string_lossy())) {
+                        if player.engine.as_ref().is_some_and(|mpv| mpv.add_subtitle(&path.to_string_lossy(), None)) {
                             return; // The async reply reports whether the subtitle loaded.
                         }
                         "Could not load subtitle file"
-                    } else if let Ok(comments) = player_ui::read_danmaku(&path, &player.danmaku_filter) {
+                    } else if let Ok(comments) = danmaku::read_xml(&path, &player.danmaku_filter) {
                         player.danmaku = comments;
                         player.show_danmaku = true;
                         if self.prefs.danmaku.remember {
@@ -1923,7 +1942,7 @@ impl AppLite {
                 if let Some((selection, subtitle_url)) = player.initial_tracks.take() {
                     if selection.subtitle_index.is_none() {
                         if let Some(url) = &subtitle_url {
-                            engine.add_subtitle(url);
+                            engine.add_subtitle(url, None);
                         }
                     }
                     for (kind, index) in [(TrackKind::Audio, selection.audio_index), (TrackKind::Subtitle, selection.subtitle_index)] {
@@ -1934,7 +1953,7 @@ impl AppLite {
                                 engine.select_track(kind, Some(track.id));
                             } else if kind == TrackKind::Subtitle {
                                 if let Some(url) = &subtitle_url {
-                                    engine.add_subtitle(url);
+                                    engine.add_subtitle(url, None);
                                 }
                             }
                         }
@@ -4120,7 +4139,11 @@ impl eframe::App for AppLite {
                 i.key_pressed(egui::Key::M),
             )
         });
-        if self.form.is_none() {
+        if let Some(player) = self.player.as_mut().filter(|player| player.caption_search.is_some()) {
+            if esc {
+                player.caption_search = None;
+            }
+        } else if self.form.is_none() {
             if let Some(player) = &mut self.player {
                 let right_down = ctx.input(|i| i.key_down(egui::Key::ArrowRight));
                 if ahead && player.menu.is_none() && player.phase == PlaybackPhase::Ready && player.boost_started.is_none() {
@@ -4193,6 +4216,7 @@ impl eframe::App for AppLite {
         }
         if self.player.is_some() {
             self.draw_player(ctx, &mut actions);
+            self.draw_caption_search(ctx);
         } else if self.servers.is_empty() && self.active.is_none() && self.view != View::Settings {
             egui::CentralPanel::default()
                 .frame(egui::Frame::none().fill(p.bg))

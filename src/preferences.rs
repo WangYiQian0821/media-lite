@@ -338,6 +338,7 @@ impl External {
 #[serde(default)]
 pub struct Danmaku {
     pub enabled: bool,
+    pub api_url: String,
     pub scroll_lines: u8,
     pub top_lines: u8,
     pub bottom_lines: u8,
@@ -357,6 +358,7 @@ impl Default for Danmaku {
     fn default() -> Self {
         Self {
             enabled: true, scroll_lines: 5, top_lines: 3, bottom_lines: 3, scale: 1.0,
+            api_url: String::new(),
             line_spacing: 4, opacity: 100, speed: 1.0, sync_speed: false, bold: false,
             compatible: false, remember: true, hide_heatmap: false, blocked_words: String::new(),
         }
@@ -365,7 +367,7 @@ impl Default for Danmaku {
 
 /// Multi-line keys as in the original preference editors. A slash-delimited
 /// line is a regex. Literal lines can match any of the supplied metadata.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct TextRules {
     literals: Vec<String>,
     regexes: Vec<regex::Regex>,

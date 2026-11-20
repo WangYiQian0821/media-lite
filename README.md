@@ -10,6 +10,11 @@ Media Lite 是用 Rust 和 egui 编写的 Windows Emby 客户端。支持多服�
 
 服务器和本机设置存放在 `%APPDATA%\MediaLite\config-v2.json`。首次启动时会从同目录的旧版 `config.json` 导入配置。这个文件可能含有登录令牌，请妥善保管。
 
+## 在线弹幕和字幕
+
+- 在「设置 → 弹幕 → 自定义弹幕 API」填写兼容 DandanPlay v2 的服务根地址或 `/api/v2` 地址，支持反向代理子路径。播放时点「弹幕 → 搜索弹幕」，确认片名和集数，选择匹配结果即可载入当前视频。也可直接在搜索窗口保存 API 地址。[DandanPlay API 文档](https://api.dandanplay.net/swagger/index.html)
+- 播放时点「字幕 → 搜索字幕 · SubtitleCat」，用预填的片名和集号搜索，选择结果及语言即可下载并加载可用的 SRT。需要翻译的语种可在字幕详情中点「在 SubtitleCat 打开」，下载后通过「打开字幕文件」载入。[SubtitleCat](https://www.subtitlecat.com/)
+
 ## 客户端界面
 
 截图来自 Media Lite 0.1.6 Windows 便携版，使用本地示例媒体库。

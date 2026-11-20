@@ -84,7 +84,7 @@ impl HttpRoute {
     }
 }
 
-fn client() -> Result<reqwest::blocking::Client, String> {
+pub(crate) fn client() -> Result<reqwest::blocking::Client, String> {
     client_for(false)
 }
 
@@ -104,13 +104,30 @@ fn client_for(direct: bool) -> Result<reqwest::blocking::Client, String> {
     Ok(client)
 }
 
-pub(crate) fn release_client() -> Result<reqwest::blocking::Client, String> {
+pub(crate) fn public_https_client() -> Result<reqwest::blocking::Client, String> {
     HttpRoute::current(false).builder()?
         .danger_accept_invalid_certs(false)
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(10))
         .build()
-        .map_err(|_| "Could not initialize GitHub HTTP".to_owned())
+        .map_err(|_| "Could not initialize HTTPS".to_owned())
+}
+
+pub(crate) fn read_bounded(request: reqwest::blocking::RequestBuilder, limit: u64) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+
+    let response = request.send().map_err(|error| friendly(&error))?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status().as_u16()));
+    }
+    let mut bytes = Vec::new();
+    response.take(limit + 1).read_to_end(&mut bytes).map_err(|_| {
+        crate::i18n::bilingual("Could not read the response", "无法读取服务器响应").into_owned()
+    })?;
+    if bytes.len() as u64 > limit {
+        return Err(crate::i18n::bilingual("The response is too large", "服务器返回的数据过大").into_owned());
+    }
+    Ok(bytes)
 }
 
 pub fn transfer_backup(url: reqwest::Url, username: String, password: String, data: Option<Vec<u8>>) -> Result<Option<Vec<u8>>, String> {

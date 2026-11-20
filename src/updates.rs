@@ -79,7 +79,7 @@ pub(super) fn check_latest(repository: &str, installed: &Version) -> Outcome {
     let Some(project) = repository.strip_prefix("https://github.com/") else {
         return Outcome::Unconfigured;
     };
-    let Ok(client) = api::release_client() else {
+    let Ok(client) = api::public_https_client() else {
         return Outcome::Failed(CheckError::Connection);
     };
     let Ok(response) = client.get(format!("https://api.github.com/repos/{project}/releases/latest"))

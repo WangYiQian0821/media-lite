@@ -1,7 +1,4 @@
 use super::*;
-use std::fs::File;
-use std::io::{BufReader, Read};
-use std::path::Path;
 use std::time::Duration;
 
 const SURFACE_WHITE: Color32 = Color32::from_rgb(243, 245, 248);
@@ -19,14 +16,6 @@ const BUTTON_FROM_BOTTOM: f32 = 47.0;
 enum Icon {
     Previous, Next, Play, Pause, Volume, Muted, Speed(f64), Audio, Subtitles,
     Danmaku, Settings, Playlist, Fullscreen, Windowed, Pin, Minimize, Maximize, Restore, Close,
-}
-
-pub(super) struct Danmaku {
-    time: f64,
-    mode: u8,
-    size: f32,
-    color: Color32,
-    text: String,
 }
 
 impl AppLite {
@@ -449,7 +438,9 @@ impl AppLite {
                     if kind == TrackKind::Subtitle {
                         choices.insert(0, (i18n::t("Turn off subtitles").into_owned(),
                             !choices.iter().any(|(_, selected, _)| *selected), Some(Action::SelectPlaybackTrack(kind, None))));
-                        choices.push((i18n::t("Open subtitle file").into_owned(), false, Some(Action::LoadLocalSubtitles)));
+                        choices.insert(1, (i18n::t("Search subtitles").into_owned(), false,
+                            Some(Action::OpenCaptionSearch(player_captions::Source::SubtitleCat))));
+                        choices.insert(2, (i18n::t("Open subtitle file").into_owned(), false, Some(Action::LoadLocalSubtitles)));
                         if enable_secondary {
                             let name = i18n::bilingual("Secondary subtitle", "次字幕");
                             choices.push((format!("{name} · {}", i18n::bilingual("Off", "关闭")),
@@ -464,6 +455,7 @@ impl AppLite {
                     choices
                 }
                 PlayerMenu::Danmaku => [
+                    ("Search danmaku", false, Some(Action::OpenCaptionSearch(player_captions::Source::Danmaku))),
                     ("Import local danmaku XML", false, Some(Action::LoadDanmaku)),
                     ("Show danmaku", player.show_danmaku && !player.danmaku.is_empty(),
                      (!player.danmaku.is_empty()).then_some(Action::ToggleDanmaku)),
@@ -682,43 +674,4 @@ pub(super) fn open_player_file(owner: Option<isize>, subtitles: bool) -> Option<
     let label = i18n::t(if subtitles { "Open subtitle file" } else { "Import local danmaku XML" });
     let patterns = if subtitles { "*.srt;*.ass;*.ssa;*.vtt;*.sub;*.sup" } else { "*.xml" };
     crate::platform::pick_file(owner, &label, patterns, None)
-}
-
-pub(super) fn read_danmaku(path: &Path, rules: &TextRules) -> Result<Vec<Danmaku>, Box<dyn std::error::Error>> {
-    use xml::reader::{EventReader, XmlEvent};
-    let input = BufReader::new(File::open(path)?).take(16 * 1024 * 1024);
-    let mut comments = Vec::new();
-    let mut current: Option<Danmaku> = None;
-    for event in EventReader::new(input) {
-        match event? {
-            XmlEvent::StartElement { name, attributes, .. } if name.local_name == "d" => {
-                current = attributes.iter().find(|attr| attr.name.local_name == "p").and_then(|attr| {
-                    let mut fields = attr.value.split(',');
-                    let time = fields.next()?.parse::<f64>().ok()?;
-                    let mode = fields.next()?.parse::<u8>().ok()?;
-                    let size = fields.next()?.parse::<u16>().ok()?.clamp(14, 38);
-                    let rgb = fields.next()?.parse::<u32>().ok()?;
-                    (time.is_finite() && time >= 0.0 && (1..=6).contains(&mode)).then(|| Danmaku {
-                        time, mode, size: f32::from(size),
-                        color: Color32::from_rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8),
-                        text: String::new(),
-                    })
-                });
-            }
-            XmlEvent::Characters(text) | XmlEvent::CData(text) => {
-                if let Some(comment) = &mut current {
-                    comment.text.push_str(&text);
-                }
-            }
-            XmlEvent::EndElement { name } if name.local_name == "d" => {
-                if let Some(mut comment) = current.take().filter(|c| !c.text.trim().is_empty() && !rules.matches(&c.text)) {
-                    comment.text = comment.text.chars().take(250).collect();
-                    comments.push(comment);
-                }
-            }
-            _ => {}
-        }
-    }
-    comments.sort_by(|a, b| a.time.total_cmp(&b.time));
-    Ok(comments)
 }
